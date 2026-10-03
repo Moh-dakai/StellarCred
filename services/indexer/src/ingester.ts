@@ -55,44 +55,37 @@ import type { Config } from "./config";
 import type { Db } from "./db";
 import { createWebhookDispatcher } from "./webhooks";
 
+import { Database } from './db';
+import { logger } from './logger';
+
 export interface VerifiedEventPayload {
   holder: string;
   credentialType: string;
   threshold?: string | number | null;
-  [key: string]: unknown;
+  [key: string]: any;
 }
 
-export function parseEvent(rawEvent: Record<string, unknown>): VerifiedEventPayload {
+export function parseEvent(rawEvent: any): VerifiedEventPayload {
   // Decode event parameters from contract logs/events
   return {
-    holder: rawEvent["holder"] as string,
-    credentialType: rawEvent["credentialType"] as string,
+    holder: rawEvent.holder,
+    credentialType: rawEvent.credentialType,
     // Parse threshold if present (supporting numeric or string representations from smart contract/events)
-    threshold:
-      rawEvent["threshold"] !== undefined && rawEvent["threshold"] !== null
-        ? Number(rawEvent["threshold"])
-        : null,
+    threshold: rawEvent.threshold !== undefined && rawEvent.threshold !== null 
+      ? Number(rawEvent.threshold) 
+      : null,
   };
 }
 
-export async function processVerifiedEvent(
-  db: Db,
-  rawEvent: Record<string, unknown>,
-  now: number = Math.floor(Date.now() / 1000),
-): Promise<void> {
+export async function processVerifiedEvent(db: Database, rawEvent: any): Promise<void> {
   const parsed = parseEvent(rawEvent);
+
+  logger.info({ holder: parsed.holder, credentialType: parsed.credentialType, threshold: parsed.threshold }, 'Processing verified event');
 
   await db.upsertClaim({
     wallet: parsed.holder,
     credential_type: parsed.credentialType,
-    issuer: (rawEvent["issuer"] as string | undefined) ?? "",
-    verified_at: (rawEvent["verified_at"] as number | undefined) ?? now,
-    expiry: (rawEvent["expiry"] as number | undefined) ?? now + 86_400,
-    ledger_sequence: (rawEvent["ledger_sequence"] as number | undefined) ?? 0,
-    threshold:
-      parsed.threshold !== undefined && parsed.threshold !== null
-        ? Number(parsed.threshold)
-        : null,
+    threshold: parsed.threshold, // Persist actual threshold instead of null
     revoked: 0,
   });
 }
